@@ -25,12 +25,31 @@ const docTypes = [
   { type: "cpat", label: "CPAT", track: "experience" },
 ];
 
+interface OllamaModel {
+  name: string;
+  size: number;
+}
+
 export default function GeneratePage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState(
+    typeof window !== "undefined" ? localStorage.getItem("doc-harness-model") ?? "" : ""
+  );
+  const provider = typeof window !== "undefined" ? localStorage.getItem("doc-harness-provider") ?? "anthropic" : "anthropic";
+
+  useEffect(() => {
+    if (provider.startsWith("ollama")) {
+      fetch("/api/ollama-models")
+        .then((res) => res.json())
+        .then((data) => { if (data.models) setOllamaModels(data.models); })
+        .catch(() => {});
+    }
+  }, [provider]);
 
   useEffect(() => {
     const saved = localStorage.getItem("doc-harness-active-prompt");
@@ -126,10 +145,31 @@ export default function GeneratePage() {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs text-text-muted mb-1">Model</label>
-                <select className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text focus:outline-none focus:border-primary">
-                  <option>claude-sonnet-4-5 (default)</option>
-                  <option>claude-opus-4-5</option>
-                </select>
+                {provider.startsWith("ollama") && ollamaModels.length > 0 ? (
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Default</option>
+                    {ollamaModels.map((m) => (
+                      <option key={m.name} value={m.name}>{m.name}</option>
+                    ))}
+                  </select>
+                ) : provider.startsWith("ollama") ? (
+                  <input
+                    type="text"
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    placeholder="e.g. qwen3, deepseek-v4-pro"
+                    className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text placeholder-text-muted focus:outline-none focus:border-primary"
+                  />
+                ) : (
+                  <select className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-sm text-text focus:outline-none focus:border-primary">
+                    <option>claude-sonnet-4-5 (default)</option>
+                    <option>claude-opus-4-5</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-text-muted mb-1">Output Directory</label>

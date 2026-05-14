@@ -13,8 +13,26 @@ export default function HomePage() {
     if (!prompt.trim()) return;
     setGenerating(true);
 
-    const sessionId = `session-${Date.now()}`;
-    router.push(`/session/${sessionId}?prompt=${encodeURIComponent(prompt)}`);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const sessionId = res.headers.get("X-Session-Id");
+      if (sessionId) {
+        router.push(`/session/${sessionId}`);
+      } else {
+        const fallbackId = `session-${Date.now()}`;
+        router.push(`/session/${fallbackId}?prompt=${encodeURIComponent(prompt)}`);
+      }
+    } catch {
+      const fallbackId = `session-${Date.now()}`;
+      router.push(`/session/${fallbackId}?prompt=${encodeURIComponent(prompt)}`);
+    }
+
+    setGenerating(false);
   }, [prompt, router]);
 
   return (

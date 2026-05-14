@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import type { PipelineEvent, DocTarget, DebateVerdict, GeneratedDocument, DocumentRelation, DocumentManifest } from "@doc-harness/core";
 
 type PhaseStatus = "pending" | "running" | "completed";
@@ -9,6 +9,33 @@ type PhaseStatus = "pending" | "running" | "completed";
 function SessionContent() {
   const params = useSearchParams();
   const prompt = params.get("prompt") ?? "No prompt provided";
+  const { id: sessionId } = useParams<{ id: string }>();
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (prompt === "No prompt provided") {
+      fetch(`/api/sessions/${sessionId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.documents && data.documents.length > 0) {
+            setResultDocuments(data.documents);
+            setPhaseStatus({
+              intake: "completed",
+              discovery: "completed",
+              generation: "completed",
+              debate: "completed",
+              review: "completed",
+              assembly: "completed",
+            });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoading(false));
+      return;
+    }
+    setIsLoading(false);
+  }, [prompt, sessionId]);
 
   const [phaseStatus, setPhaseStatus] = useState<Record<string, PhaseStatus>>({
     intake: "pending",
@@ -27,6 +54,7 @@ function SessionContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (prompt === "No prompt provided") return;
     const controller = new AbortController();
 
     fetch("/api/generate", {
@@ -125,6 +153,14 @@ function SessionContent() {
         break;
     }
   }, []);
+
+  if (isLoading) {
+    return (
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>
+        <div style={{ color: "#888" }}>Loading session...</div>
+      </main>
+    );
+  }
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>

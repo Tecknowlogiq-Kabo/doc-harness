@@ -3,7 +3,7 @@ import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 
 function getModel(): LanguageModel {
-  const ollamaUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+  const ollamaUrl = process.env.OLLAMA_BASE_URL ?? "https://api.ollama.com/v1";
   const ollamaModel = process.env.OLLAMA_MODEL;
   if (ollamaModel) {
     const ollamaProvider = createOpenAI({

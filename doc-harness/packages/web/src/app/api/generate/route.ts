@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
           completedAt: null,
         });
 
-        const result = await runPipeline(prompt, emit);
+        const result = await runPipeline(prompt, emit, req.signal);
 
         await store.update(sessionId, {
           status: "completed",

@@ -2,7 +2,6 @@ import type { Agent } from "../agents/agent-factory";
 import { intakeAgent } from "../agents/orchestrator/intake-agent";
 import { discoveryAgent } from "../agents/orchestrator/discovery-agent";
 import { reviewerAgent } from "../agents/orchestrator/reviewer-agent";
-import { supervisorAgent } from "../agents/orchestrator/supervisor-agent";
 import { runDebate } from "../agents/debate/debate-orchestrator";
 import { scoreDocument } from "../scorers/document-scorers";
 import {
@@ -16,7 +15,8 @@ import type {
   DocumentManifest, DocTarget, GeneratedDocument,
   PipelineEvent, DocumentRelation,
 } from "../types";
-import { getDocTypeEntry, getSuggestedRelations } from "../registry/doc-type-registry";
+import { getDocTypeEntry, getSuggestedRelations, getAgentId } from "../registry/doc-type-registry";
+import { extractSections } from "../utils/extract-sections";
 
 const specialistMap: Record<string, Agent> = {
   "prd-agent": prdAgent, "idea-agent": ideaAgent, "plan-agent": planAgent,
@@ -36,12 +36,16 @@ export type PipelineResult = {
 
 export async function runPipeline(
   userPrompt: string,
-  emit: PipelineEmitter
+  emit: PipelineEmitter,
+  signal?: AbortSignal
 ): Promise<PipelineResult> {
   emit({ phase: "intake", docs: [] });
 
+  if (signal?.aborted) throw new Error("Pipeline cancelled");
+
   const intakeResult = await intakeAgent.generate(
-    `User prompt: "${userPrompt}"\n\nClassify this prompt and determine which document types to generate. Use the docTypeClassifier tool.`
+    `User prompt: "${userPrompt}"\n\nClassify this prompt and determine which document types to generate. Use the docTypeClassifier tool.`,
+    signal
   );
 
   const manifest: DocumentManifest = { userPrompt, docs: [] };
@@ -60,16 +64,19 @@ export async function runPipeline(
 
   emit({ phase: "discovery", progress: 0, facts: 0 });
 
+  if (signal?.aborted) throw new Error("Pipeline cancelled");
+
   const docTypeList = manifest.docs.map((d) => d.type).join(", ");
   await discoveryAgent.generate(
-    `Build domain knowledge for: "${userPrompt}"\n\nDocument types to generate: ${docTypeList}`
+    `Build domain knowledge for: "${userPrompt}"\n\nDocument types to generate: ${docTypeList}`,
+    signal
   );
 
   emit({ phase: "discovery", progress: 100, facts: 5 });
 
   const totalDocs = manifest.docs.length;
-  let completedDocs = 0;
-  const generatedDocs: GeneratedDocument[] = [];
+
+  if (signal?.aborted) throw new Error("Pipeline cancelled");
 
   const generatePromises = manifest.docs.map(async (docTarget) => {
     emit({
@@ -78,34 +85,31 @@ export async function runPipeline(
       slug: docTarget.slug,
       status: "started",
       total: totalDocs,
-      completed: completedDocs,
+      completed: 0,
     });
 
     try {
       const agent = getAgentForTarget(docTarget);
-      const doc = await generateDocument(agent, docTarget, userPrompt);
+      const doc = await generateDocument(agent, docTarget, userPrompt, signal);
 
-      completedDocs++;
       emit({
         phase: "generation",
         docType: docTarget.type,
         slug: docTarget.slug,
         status: "completed",
         total: totalDocs,
-        completed: completedDocs,
+        completed: 0,
       });
 
-      generatedDocs.push(doc);
       return doc;
     } catch {
-      completedDocs++;
       emit({
         phase: "generation",
         docType: docTarget.type,
         slug: docTarget.slug,
         status: "failed",
         total: totalDocs,
-        completed: completedDocs,
+        completed: 0,
       });
       return null;
     }
@@ -116,65 +120,104 @@ export async function runPipeline(
     .filter((r) => r.status === "fulfilled" && r.value !== null)
     .map((r) => (r as PromiseFulfilledResult<GeneratedDocument>).value);
 
-  const debatedDocs: GeneratedDocument[] = [];
+  const completedCount = validDocs.length;
   for (const doc of validDocs) {
-    const transcript = await runDebate(doc);
-
-    for (const round of transcript.rounds) {
-      emit({
-        phase: "debate",
-        docType: doc.type,
-        slug: doc.slug,
-        round: round.round,
-        role: "advocate",
-        argument: "Advocate argument recorded",
-      });
-      emit({
-        phase: "debate",
-        docType: doc.type,
-        slug: doc.slug,
-        round: round.round,
-        role: "skeptic",
-        argument: "Skeptic argument recorded",
-      });
-    }
-
     emit({
-      phase: "debate-verdict",
+      phase: "generation",
       docType: doc.type,
       slug: doc.slug,
-      verdict: transcript.verdict,
+      status: "completed",
+      total: totalDocs,
+      completed: completedCount,
     });
+  }
 
-    if (transcript.verdict.verdict === "reject") {
-      const docTarget = manifest.docs.find((d) => d.slug === doc.slug);
-      if (docTarget) {
-        const agent = getAgentForTarget(docTarget);
-        const regenerated = await generateDocument(agent, docTarget, userPrompt);
-        debatedDocs.push(regenerated);
-        continue;
+  const debateBatchSize = 4;
+  const debatedDocs: GeneratedDocument[] = [];
+
+  if (signal?.aborted) throw new Error("Pipeline cancelled");
+
+  for (let i = 0; i < validDocs.length; i += debateBatchSize) {
+    const batch = validDocs.slice(i, i + debateBatchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (doc) => {
+        const transcript = await runDebate(doc);
+
+        for (const round of transcript.rounds) {
+          emit({
+            phase: "debate",
+            docType: doc.type,
+            slug: doc.slug,
+            round: round.round,
+            role: "advocate",
+            argument: round.advocate,
+          });
+          emit({
+            phase: "debate",
+            docType: doc.type,
+            slug: doc.slug,
+            round: round.round,
+            role: "skeptic",
+            argument: round.skeptic,
+          });
+        }
+
+        emit({
+          phase: "debate-verdict",
+          docType: doc.type,
+          slug: doc.slug,
+          verdict: transcript.verdict,
+        });
+
+        return { doc, transcript };
+      })
+    );
+
+    for (const { doc, transcript } of batchResults) {
+      if (transcript.verdict.verdict === "reject") {
+        const docTarget = manifest.docs.find((d) => d.slug === doc.slug);
+        if (docTarget) {
+          emit({
+            phase: "generation",
+            docType: docTarget.type,
+            slug: docTarget.slug,
+            status: "started",
+            total: totalDocs,
+            completed: debatedDocs.length,
+          });
+
+          const agent = getAgentForTarget(docTarget);
+          const regenerated = await generateDocument(agent, docTarget, userPrompt, signal);
+          debatedDocs.push(regenerated);
+          continue;
+        }
       }
+      debatedDocs.push(doc);
     }
-
-    debatedDocs.push(doc);
   }
 
   const reviewedDocs: GeneratedDocument[] = [];
   for (const doc of debatedDocs) {
     const scores = scoreDocument(doc);
-
     emit({ phase: "review", slug: doc.slug, scores });
 
     if (scores.overall < 0.7) {
+      const escalated = await escalateWithSupervisor(doc, scores, userPrompt, signal);
+      if (escalated) {
+        reviewedDocs.push(escalated);
+        continue;
+      }
+    }
+
+    if (scores.overall >= 0.85) {
       try {
-        const improved = await selfCorrectDocument(doc, scores);
-        const newScores = scoreDocument(improved);
-        if (newScores.overall >= 0.7) {
-          reviewedDocs.push(improved);
-          continue;
-        }
+        const reviewerResult = await reviewerAgent.generate(
+          `Review this document for quality:\n\n${doc.content}\n\nHeuristic scores: completeness=${scores.completeness}, format=${scores.format}, clarity=${scores.clarity}, depth=${scores.depth}`,
+          signal
+        );
+        emit({ phase: "review", slug: doc.slug, scores, reviewerNotes: reviewerResult.text });
       } catch {
-        // Keep original
+        // Reviewer failed, heuristic scores are sufficient
       }
     }
 
@@ -188,20 +231,22 @@ export async function runPipeline(
     emit({ phase: "assembly", slug: doc.slug, status: "written" });
   }
 
+  const result: PipelineResult = { documents: reviewedDocs, relations, manifest };
   emit({ phase: "complete", outputDir: "docs/", docCount: reviewedDocs.length });
+  emit({ phase: "result", result });
 
-  return { documents: reviewedDocs, relations, manifest };
+  return result;
 }
 
 function getAgentForTarget(target: DocTarget): Agent {
-  const entry = getDocTypeEntry(target.type);
-  return specialistMap[entry.agentId] ?? prdAgent;
+  return specialistMap[getAgentId(target.type)] ?? prdAgent;
 }
 
 async function generateDocument(
   agent: Agent,
   target: DocTarget,
-  userPrompt: string
+  userPrompt: string,
+  signal?: AbortSignal
 ): Promise<GeneratedDocument> {
   const entry = getDocTypeEntry(target.type);
 
@@ -217,7 +262,8 @@ Use the referenceMaterial tool to check section requirements.
 Use the knowledgeBuilder tool for domain context.
 Generate all required sections with substantive content.
 
-First think about what this document needs, then generate it section by section.`
+First think about what this document needs, then generate it section by section.`,
+    signal
   );
 
   return parseDocumentOutput(target, result.text);
@@ -240,45 +286,12 @@ function parseDocumentOutput(
   };
 }
 
-function extractSections(text: string): { heading: string; body: string }[] {
-  const sections: { heading: string; body: string }[] = [];
-  const headingRegex = /^#{1,4}\s+(.+)$/gm;
-
-  let lastIndex = 0;
-  let lastHeading = "";
-  let match: RegExpExecArray | null;
-
-  while ((match = headingRegex.exec(text)) !== null) {
-    if (lastHeading) {
-      const body = text.slice(lastIndex, match.index).trim();
-      if (body.length > 0) {
-        sections.push({ heading: lastHeading, body });
-      }
-    }
-    lastHeading = match[1].trim();
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastHeading) {
-    const body = text.slice(lastIndex).trim();
-    if (body.length > 0) {
-      sections.push({ heading: lastHeading, body });
-    }
-  }
-
-  if (sections.length === 0 && text.length > 0) {
-    sections.push({ heading: "Content", body: text });
-  }
-
-  return sections;
-}
-
 async function selfCorrectDocument(
   doc: GeneratedDocument,
-  scores: { completeness: number; format: number; clarity: number; depth: number; crossRef: number; overall: number; issues: string[] }
+  scores: { completeness: number; format: number; clarity: number; depth: number; crossRef: number; overall: number; issues: string[] },
+  signal?: AbortSignal
 ): Promise<GeneratedDocument> {
-  const entry = getDocTypeEntry(doc.type);
-  const agent = specialistMap[entry.agentId] ?? prdAgent;
+  const agent = specialistMap[getAgentId(doc.type)] ?? prdAgent;
 
   const result = await agent.generate(
     `Revise this document to address quality issues:
@@ -291,7 +304,8 @@ ${scores.issues.map((i) => `- ${i}`).join("\n")}
 Original document:
 ${doc.content}
 
-Generate an improved version that fixes all identified issues.`
+Generate an improved version that fixes all identified issues.`,
+    signal
   );
 
   const sections = extractSections(result.text);
@@ -300,6 +314,67 @@ Generate an improved version that fixes all identified issues.`
     content: result.text,
     sections: sections.length > 0 ? sections : doc.sections,
   };
+}
+
+async function escalateWithSupervisor(
+  doc: GeneratedDocument,
+  scores: { completeness: number; format: number; clarity: number; depth: number; crossRef: number; overall: number; issues: string[] },
+  userPrompt: string,
+  signal?: AbortSignal
+): Promise<GeneratedDocument | null> {
+  const escalationAttempts = new Map<string, number>();
+  const key = doc.slug;
+
+  if (signal?.aborted) throw new Error("Pipeline cancelled");
+
+  const attempt = escalationAttempts.get(key) ?? 0;
+  escalationAttempts.set(key, attempt + 1);
+
+  if (attempt >= 2) {
+    return null;
+  }
+
+  try {
+    if (attempt === 0) {
+      const improved = await selfCorrectDocument(doc, scores, signal);
+      const newScores = scoreDocument(improved);
+      if (newScores.overall >= 0.7) return improved;
+      escalationAttempts.set(key, 1);
+    }
+
+    if (attempt <= 1) {
+      const alternateAgent = getAlternateAgent(doc.type);
+      if (alternateAgent) {
+        const regenerated = await generateDocument(
+          alternateAgent,
+          { type: doc.type, slug: doc.slug, title: doc.title, track: "vision" },
+          userPrompt,
+          signal
+        );
+        const newScores = scoreDocument(regenerated);
+        if (newScores.overall >= 0.7) return regenerated;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getAlternateAgent(type: string): Agent | null {
+  const alternateMap: Record<string, string> = {
+    prd: "brd-agent",
+    brd: "prd-agent",
+    srs: "syrs-agent",
+    syrs: "srs-agent",
+    spec: "rfc-agent",
+    rfc: "spec-agent",
+    guide: "doc-agent",
+    doc: "guide-agent",
+  };
+  const alternateId = alternateMap[type];
+  return alternateId ? (specialistMap[alternateId] ?? null) : null;
 }
 
 export function mapRelations(docs: GeneratedDocument[]): DocumentRelation[] {
@@ -333,6 +408,8 @@ export function mapRelations(docs: GeneratedDocument[]): DocumentRelation[] {
 }
 
 function extractJSON(text: string): string {
-  const match = text.match(/\{[\s\S]*\}/);
+  const jsonBlock = text.match(/```json\s*([\s\S]*?)```/);
+  if (jsonBlock) return jsonBlock[1].trim();
+  const match = text.match(/\{(?:[^{}]|\{[^{}]*\})*\}/);
   return match ? match[0] : "{}";
 }

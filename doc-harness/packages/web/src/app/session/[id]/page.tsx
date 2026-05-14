@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams, useParams } from "next/navigation";
-import type { PipelineEvent, DocTarget, DebateVerdict, GeneratedDocument, DocumentRelation, DocumentManifest } from "@doc-harness/core";
+import Link from "next/link";
+import type { PipelineEvent, DocTarget, DebateVerdict, GeneratedDocument } from "@doc-harness/core";
 
 type PhaseStatus = "pending" | "running" | "completed";
 
@@ -156,27 +157,42 @@ function SessionContent() {
 
   if (isLoading) {
     return (
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>
-        <div style={{ color: "#888" }}>Loading session...</div>
+      <main className="max-w-3xl mx-auto p-8">
+        <nav className="mb-8 flex justify-between items-center">
+          <Link href="/" className="text-lg font-bold text-primary no-underline">DocHarness</Link>
+          <Link href="/sessions" className="text-sm text-text-muted hover:text-text transition-colors">History</Link>
+        </nav>
+        <div className="text-text-muted">Loading session...</div>
       </main>
     );
   }
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>
-      <h1 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>Pipeline Status</h1>
-      <p style={{ color: "#666", marginBottom: "2rem", fontSize: "0.9rem" }}>
+    <main className="max-w-3xl mx-auto p-8">
+      <nav className="mb-8 flex justify-between items-center">
+        <Link href="/" className="text-lg font-bold text-primary no-underline">DocHarness</Link>
+        <Link href="/sessions" className="text-sm text-text-muted hover:text-text transition-colors">History</Link>
+      </nav>
+
+      <h1 className="text-xl font-bold mb-2">Pipeline Status</h1>
+      <p className="text-text-muted mb-8 text-sm">
         {prompt.slice(0, 100)}{prompt.length > 100 ? "..." : ""}
       </p>
 
       {error && (
-        <div style={{ padding: "1rem", background: "#3b0a0a", borderRadius: 8, marginBottom: "1rem", border: "1px solid #6b2020" }}>
-          {error}
+        <div className="p-4 bg-red-950 rounded-lg mb-4 border border-red-900">
+          <p className="text-sm">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:opacity-90"
+          >
+            Retry
+          </button>
         </div>
       )}
 
       {/* Phase progress */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "2rem" }}>
+      <div className="flex flex-col gap-2 mb-8">
         {(["intake", "discovery", "generation", "debate", "review", "assembly"] as const).map((phase) => (
           <PhaseRow
             key={phase}
@@ -195,41 +211,28 @@ function SessionContent() {
 
       {/* Document cards */}
       {docs.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "0.75rem" }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
           {docs.map((doc) => {
             const verdict = verdicts[doc.slug];
+            const borderColor = verdict
+              ? verdict.verdict === "approve" ? "border-success" : verdict.verdict === "revise" ? "border-warning" : "border-error"
+              : "border-border";
             return (
               <div
                 key={doc.slug}
-                style={{
-                  padding: "0.75rem",
-                  background: "#1a1a1a",
-                  borderRadius: 8,
-                  border: verdict
-                    ? verdict.verdict === "approve"
-                      ? "1px solid #22c55e"
-                      : verdict.verdict === "revise"
-                      ? "1px solid #eab308"
-                      : "1px solid #ef4444"
-                    : "1px solid #333",
-                }}
+                className={`p-3 bg-surface rounded-lg border ${borderColor}`}
               >
-                <div style={{ fontSize: "0.75rem", color: "#888", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+                <div className="text-xs text-text-muted uppercase mb-1">
                   {doc.type} · {doc.track}
                 </div>
-                <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{doc.title}</div>
-                <div style={{ fontSize: "0.8rem", color: "#aaa" }}>{doc.slug}.{doc.type}.md</div>
+                <div className="font-semibold mb-1">{doc.title}</div>
+                <div className="text-sm text-text-muted">{doc.slug}.{doc.type}.md</div>
                 {verdict && (
-                  <div style={{
-                    marginTop: "0.5rem",
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: 4,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    background: verdict.verdict === "approve" ? "#14532d" : verdict.verdict === "revise" ? "#422006" : "#450a0a",
-                    color: verdict.verdict === "approve" ? "#22c55e" : verdict.verdict === "revise" ? "#eab308" : "#ef4444",
-                  }}>
+                  <div className={`mt-2 px-2 py-1 rounded text-xs font-semibold uppercase ${
+                    verdict.verdict === "approve" ? "bg-green-950 text-success"
+                    : verdict.verdict === "revise" ? "bg-yellow-950 text-warning"
+                    : "bg-red-950 text-error"
+                  }`}>
                     {verdict.verdict}
                   </div>
                 )}
@@ -241,15 +244,15 @@ function SessionContent() {
 
       {/* Debate events */}
       {debateEvents.length > 0 && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Debate Activity</h2>
-          <div style={{ fontSize: "0.85rem", color: "#888", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-2">Debate Activity</h2>
+          <div className="text-sm text-text-muted flex flex-col gap-2">
             {debateEvents.map((e, i) => (
-              <div key={i} style={{ padding: "0.5rem", background: "#111", borderRadius: 6 }}>
-                <div style={{ fontWeight: 600, color: e.role === "advocate" ? "#22c55e" : "#ef4444", marginBottom: "0.25rem" }}>
+              <div key={i} className="p-2 bg-surface rounded-md">
+                <div className={`font-semibold mb-1 ${e.role === "advocate" ? "text-success" : "text-error"}`}>
                   [{e.slug}] Round {e.round} — {e.role}
                 </div>
-                <div style={{ fontSize: "0.8rem", lineHeight: 1.5, maxHeight: 120, overflowY: "auto" }}>
+                <div className="text-xs leading-relaxed max-h-28 overflow-y-auto">
                   {e.argument.slice(0, 400)}{e.argument.length > 400 ? "..." : ""}
                 </div>
               </div>
@@ -260,8 +263,8 @@ function SessionContent() {
 
       {/* Result documents */}
       {resultDocuments.length > 0 && (
-        <div style={{ marginTop: "2rem" }}>
-          <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Generated Documents</h2>
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-2">Generated Documents</h2>
           <button
             onClick={async () => {
               try {
@@ -282,16 +285,16 @@ function SessionContent() {
                 console.error("Download failed:", err);
               }
             }}
-            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem", fontWeight: 600, borderRadius: 6, border: "none", background: "#7c3aed", color: "#fff", cursor: "pointer", marginBottom: "1rem" }}
+            className="px-4 py-2 text-sm font-semibold rounded-md border-none bg-primary text-white cursor-pointer hover:opacity-90 mb-4"
           >
             Download All as ZIP ({resultDocuments.length} docs)
           </button>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div className="flex flex-col gap-3">
             {resultDocuments.map((doc) => (
-              <details key={doc.slug} style={{ padding: "0.75rem", background: "#111", borderRadius: 8, border: "1px solid #333" }}>
-                <summary style={{ display: "flex", alignItems: "center", fontWeight: 600, cursor: "pointer", color: "#e0e0e0" }}>
+              <details key={doc.slug} className="p-3 bg-surface rounded-lg border border-border">
+                <summary className="flex items-center font-semibold cursor-pointer text-text">
                   <span>
-                    {doc.title} <span style={{ color: "#888", fontSize: "0.8rem" }}>({doc.type})</span>
+                    {doc.title} <span className="text-text-muted text-xs">({doc.type})</span>
                   </span>
                   <button
                     onClick={(e) => {
@@ -304,12 +307,12 @@ function SessionContent() {
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    style={{ marginLeft: "auto", padding: "0.2rem 0.5rem", fontSize: "0.75rem", borderRadius: 4, border: "1px solid #444", background: "transparent", color: "#888", cursor: "pointer" }}
+                    className="ml-auto px-2 py-1 text-xs rounded border border-border bg-transparent text-text-muted cursor-pointer"
                   >
                     Download .md
                   </button>
                 </summary>
-                <pre style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap", fontSize: "0.8rem", lineHeight: 1.5, color: "#aaa", maxHeight: 400, overflowY: "auto" }}>
+                <pre className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-text-muted max-h-96 overflow-y-auto">
                   {doc.content}
                 </pre>
               </details>
@@ -328,10 +331,10 @@ function PhaseRow({ phase, status, extra }: { phase: string; status: PhaseStatus
     completed: "✓",
   };
 
-  const colors: Record<PhaseStatus, string> = {
-    pending: "#444",
-    running: "#7c3aed",
-    completed: "#22c55e",
+  const statusColor: Record<PhaseStatus, string> = {
+    pending: "text-border",
+    running: "text-primary",
+    completed: "text-success",
   };
 
   const labels: Record<string, string> = {
@@ -344,17 +347,19 @@ function PhaseRow({ phase, status, extra }: { phase: string; status: PhaseStatus
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0", borderBottom: "1px solid #1a1a1a" }}>
-      <span style={{ color: colors[status], fontSize: "1.2rem" }}>{icons[status]}</span>
-      <span style={{ flex: 1, color: colors[status] }}>{labels[phase] ?? phase}</span>
-      {extra && <span style={{ fontSize: "0.8rem", color: "#666" }}>{extra}</span>}
+    <div className="flex items-center gap-3 py-2 border-b border-surface">
+      <span className={`text-lg ${statusColor[status]}`}>{icons[status]}</span>
+      <span className={`flex-1 ${status === "pending" ? "text-text-muted" : "text-text"}`}>
+        {labels[phase] ?? phase}
+      </span>
+      {extra && <span className="text-xs text-text-muted">{extra}</span>}
     </div>
   );
 }
 
 export default function SessionPage() {
   return (
-    <Suspense fallback={<div style={{ padding: "2rem", color: "#888" }}>Loading...</div>}>
+    <Suspense fallback={<div className="p-8 text-text-muted">Loading...</div>}>
       <SessionContent />
     </Suspense>
   );

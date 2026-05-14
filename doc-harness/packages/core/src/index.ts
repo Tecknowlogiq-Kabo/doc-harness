@@ -27,3 +27,5 @@ export {
 
 export * from "./export";
 export * from "./store";
+export * from "./cli";
+export * from "./config";

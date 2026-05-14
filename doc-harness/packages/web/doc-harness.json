@@ -1,0 +1,22 @@
+[
+  {
+    "id": "session-1778776194733",
+    "prompt": "create a user management system",
+    "status": "failed",
+    "documents": [],
+    "relations": [],
+    "manifest": null,
+    "createdAt": "2026-05-14T16:29:54.733Z",
+    "completedAt": null
+  },
+  {
+    "id": "session-1778776213019",
+    "prompt": "create a user management system",
+    "status": "failed",
+    "documents": [],
+    "relations": [],
+    "manifest": null,
+    "createdAt": "2026-05-14T16:30:13.019Z",
+    "completedAt": null
+  }
+]

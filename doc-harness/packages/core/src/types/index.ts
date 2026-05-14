@@ -111,6 +111,7 @@ export const PipelineEventSchema = z.discriminatedUnion("phase", [
     relations: z.array(DocumentRelationSchema),
     manifest: DocumentManifestSchema,
   }) }),
+  z.object({ phase: z.literal("usage"), promptTokens: z.number(), completionTokens: z.number(), totalTokens: z.number() }),
   z.object({ phase: z.literal("error"), message: z.string() }),
 ]);
 

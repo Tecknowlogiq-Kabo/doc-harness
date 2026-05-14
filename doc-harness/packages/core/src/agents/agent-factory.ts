@@ -17,6 +17,16 @@ export function getModelForRole(role: string): LanguageModel {
   return ollamaProvider(modelName) as any;
 }
 
+let totalTokens = { prompt: 0, completion: 0 };
+
+export function getTokenUsage() {
+  return { ...totalTokens };
+}
+
+export function resetTokenUsage() {
+  totalTokens = { prompt: 0, completion: 0 };
+}
+
 export interface AgentConfig {
   system: string;
   role?: "orchestrator" | "specialist" | "debate";
@@ -66,6 +76,11 @@ export function createAgent(config: AgentConfig) {
             stopWhen: stepCountIs(maxSteps),
             abortSignal: signal,
           });
+
+          if (result.usage) {
+            totalTokens.prompt += result.usage.inputTokens ?? 0;
+            totalTokens.completion += result.usage.outputTokens ?? 0;
+          }
 
           return {
             text: result.text,

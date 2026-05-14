@@ -1,4 +1,5 @@
 import type { Agent } from "../agents/agent-factory";
+import { getTokenUsage, resetTokenUsage } from "../agents/agent-factory";
 import { intakeAgent } from "../agents/orchestrator/intake-agent";
 import { discoveryAgent } from "../agents/orchestrator/discovery-agent";
 import { reviewerAgent } from "../agents/orchestrator/reviewer-agent";
@@ -309,6 +310,10 @@ Use the referenceMaterial tool to check section requirements.`,
     emit({ phase: "assembly", slug: doc.slug, status: "linked" });
     emit({ phase: "assembly", slug: doc.slug, status: "written" });
   }
+
+  const usage = getTokenUsage();
+  emit({ phase: "usage", promptTokens: usage.prompt, completionTokens: usage.completion, totalTokens: usage.prompt + usage.completion });
+  resetTokenUsage();
 
   const result: PipelineResult = { documents: reviewedDocs, relations, manifest };
   emit({ phase: "complete", outputDir: "docs/", docCount: reviewedDocs.length });

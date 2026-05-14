@@ -1,32 +1,14 @@
 import { generateText, stepCountIs, type Tool, type LanguageModel, type LanguageModelUsage } from "ai";
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 
 function getModel(): LanguageModel {
-  const ollamaUrl = process.env.OLLAMA_BASE_URL ?? "https://api.ollama.com/v1";
-  const ollamaModel = process.env.OLLAMA_MODEL;
-  if (ollamaModel) {
-    const ollamaProvider = createOpenAI({
-      baseURL: ollamaUrl,
-      apiKey: process.env.OLLAMA_API_KEY ?? "ollama",
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ollamaProvider(ollamaModel) as any;
-  }
+  const modelName = process.env.OLLAMA_MODEL ?? "deepseek-v4-flash";
+  const baseUrl = process.env.OLLAMA_BASE_URL ?? "https://api.ollama.com/v1";
+  const apiKey = process.env.OLLAMA_API_KEY ?? "ollama";
 
-  const gatewayUrl = process.env.CLOUDFLARE_AI_GATEWAY_URL;
-  const gatewayToken = process.env.CLOUDFLARE_AI_GATEWAY_TOKEN;
-  const modelName = process.env.DOC_HARNESS_MODEL ?? "claude-sonnet-4-5";
-
-  if (gatewayUrl && gatewayToken) {
-    const gatewayProvider = createAnthropic({
-      baseURL: gatewayUrl,
-      apiKey: gatewayToken,
-    });
-    return gatewayProvider(modelName);
-  }
-
-  return anthropic(modelName);
+  const ollamaProvider = createOpenAI({ baseURL: baseUrl, apiKey });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ollamaProvider(modelName) as any;
 }
 
 export interface AgentConfig {

@@ -22,6 +22,13 @@ export function scoreDocument(document: GeneratedDocument): Score {
   return { completeness, format, clarity, depth, crossRef, overall, issues };
 }
 
+export function passesHardThresholds(scores: Score): boolean {
+  if (scores.completeness < 0.6) return false;
+  if (scores.clarity < 0.5) return false;
+  if (scores.format < 0.5) return false;
+  return true;
+}
+
 function scoreCompleteness(doc: GeneratedDocument, requiredSections: string[]): number {
   if (requiredSections.length === 0) return 1;
 

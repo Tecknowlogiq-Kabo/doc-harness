@@ -3,7 +3,7 @@ export * from "./registry/doc-type-registry";
 export { runPipeline } from "./pipeline/pipeline-orchestrator";
 export type { PipelineResult } from "./pipeline/pipeline-orchestrator";
 export { runDebate } from "./agents/debate/debate-orchestrator";
-export { scoreDocument } from "./scorers/document-scorers";
+export { scoreDocument, passesHardThresholds } from "./scorers/document-scorers";
 export { mapDocumentRelations, formatDocumentOutput, formatRelationsOutput } from "./utils/relation-mapper";
 export { extractSections } from "./utils/extract-sections";
 export { runParallelGeneration, createParallelTask } from "./utils/parallel-runner";

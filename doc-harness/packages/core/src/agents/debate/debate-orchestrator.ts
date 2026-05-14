@@ -46,23 +46,57 @@ ${document.content}
     skeptic: skepticR1.text,
   });
 
-  // Round 2: Rebuttal and surrebuttal
-  const advocateR2 = await advocateAgent.generate(
-    `Respond to this critique of the document:\n\n${docContext}\n\nSkeptic's critique:\n${skepticR1.text}\n\nProvide your rebuttal. Address each point the Skeptic raised.`
+  const prelimCheck = await mediatorAgent.generate(
+    `Preliminary assessment after Round 1 — can you already issue a confident verdict?
+
+DOCUMENT:
+${docContext}
+
+ROUND 1:
+Advocate: ${advocateR1.text}
+Skeptic: ${skepticR1.text}
+
+If the Skeptic raised NO valid concerns, OR if the Advocate has already addressed ALL concerns, respond with JSON:
+{"canDecide": true, "verdict": "approve", "reasoning": "..."}
+
+Otherwise if major issues remain that need another round:
+{"canDecide": false}
+
+Only respond with valid JSON.`
   );
 
-  const skepticR2 = await skepticAgent.generate(
-    `Respond to the Advocate's rebuttal:\n\n${docContext}\n\nAdvocate's rebuttal:\n${advocateR2.text}\n\nProvide your surrebuttal. Which of the Advocate's counter-arguments fail? Why?`
-  );
+  let canDecide = false;
+  try {
+    const prelim = JSON.parse(extractJSONBlock(prelimCheck.text) ?? "{}");
+    if (prelim.canDecide === true && prelim.verdict === "approve") {
+      canDecide = true;
+      transcript.verdict = {
+        verdict: "approve",
+        reasoning: prelim.reasoning ?? "No valid objections raised after Round 1",
+        praises: [],
+        issues: [],
+      };
+    }
+  } catch {
+    // Fall through to full debate
+  }
 
-  transcript.rounds.push({
-    round: 2,
-    advocate: advocateR2.text,
-    skeptic: skepticR2.text,
-  });
+  if (!canDecide) {
+    const advocateR2 = await advocateAgent.generate(
+      `Respond to this critique of the document:\n\n${docContext}\n\nSkeptic's critique:\n${skepticR1.text}\n\nProvide your rebuttal. Address each point the Skeptic raised.`
+    );
 
-  // Round 3: Mediator verdict
-  const debateHistory = `
+    const skepticR2 = await skepticAgent.generate(
+      `Respond to the Advocate's rebuttal:\n\n${docContext}\n\nAdvocate's rebuttal:\n${advocateR2.text}\n\nProvide your surrebuttal. Which of the Advocate's counter-arguments fail? Why?`
+    );
+
+    transcript.rounds.push({
+      round: 2,
+      advocate: advocateR2.text,
+      skeptic: skepticR2.text,
+    });
+
+    const debateHistory = `
 DOCUMENT:
 ${docContext}
 
@@ -75,14 +109,22 @@ Advocate rebuttal: ${advocateR2.text}
 Skeptic surrebuttal: ${skepticR2.text}
 `;
 
-  const verdictResult = await mediatorAgent.generate(
-    `Review this debate and issue a verdict:\n\n${debateHistory}\n\nAfter reviewing all three rounds, render your final verdict (approve/revise/reject).`
-  );
+    const verdictResult = await mediatorAgent.generate(
+      `Review this debate and issue a verdict:\n\n${debateHistory}\n\nAfter reviewing all three rounds, render your final verdict (approve/revise/reject).`
+    );
 
-  const verdict = parseVerdict(verdictResult.text);
+    const verdict = parseVerdict(verdictResult.text);
+    transcript.verdict = verdict;
+  }
 
-  transcript.verdict = verdict;
   return transcript;
+}
+
+function extractJSONBlock(text: string): string | null {
+  const jsonBlock = text.match(/```json\s*([\s\S]*?)```/);
+  if (jsonBlock) return jsonBlock[1].trim();
+  const match = text.match(/\{[\s\S]*\}/);
+  return match ? match[0] : null;
 }
 
 function parseVerdict(text: string): DebateVerdict {

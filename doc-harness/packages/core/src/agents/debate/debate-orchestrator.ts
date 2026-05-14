@@ -78,20 +78,43 @@ Skeptic surrebuttal: ${skepticR2.text}
     `Review this debate and issue a verdict:\n\n${debateHistory}\n\nAfter reviewing all three rounds, render your final verdict (approve/revise/reject).`
   );
 
-  const verdict: DebateVerdict = {
-    verdict: verdictResult.text.toLowerCase().includes("approve") ? "approve"
-      : verdictResult.text.toLowerCase().includes("reject") ? "reject"
-      : "revise",
-    reasoning: verdictResult.text,
-    praises: extractBulletPoints(verdictResult.text, /praise|strength|good|well/i),
-    issues: extractBulletPoints(verdictResult.text, /issue|flaw|missing|vague|weak|error/i),
-    suggestedFixes: verdictResult.text.toLowerCase().includes("revise")
-      ? extractBulletPoints(verdictResult.text, /fix|suggest|recommend|should/i)
-      : undefined,
-  };
+  const verdict = parseVerdict(verdictResult.text);
 
   transcript.verdict = verdict;
   return transcript;
+}
+
+function parseVerdict(text: string): DebateVerdict {
+  const lower = text.toLowerCase();
+
+  try {
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0].startsWith("{") ? jsonMatch[0] : jsonMatch[1]);
+      return parsed as DebateVerdict;
+    }
+  } catch {
+    // Fall through to text-based fallback parsing
+  }
+
+  return fallbackParseVerdict(lower, text);
+}
+
+function fallbackParseVerdict(lower: string, text: string): DebateVerdict {
+  const hasApprove = /\bapprove\b/i.test(lower) && !/\bdo not approve\b|\bdisapprove\b/i.test(lower);
+  const hasReject = /\breject\b/i.test(lower) && !/\bdo not reject\b/i.test(lower);
+
+  return {
+    verdict: hasApprove ? "approve"
+      : hasReject ? "reject"
+      : "revise",
+    reasoning: text,
+    praises: extractBulletPoints(text, /praise|strength|good|well/i),
+    issues: extractBulletPoints(text, /issue|flaw|missing|vague|weak|error/i),
+    suggestedFixes: /\brevise\b/i.test(lower)
+      ? extractBulletPoints(text, /fix|suggest|recommend|should/i)
+      : undefined,
+  };
 }
 
 function extractBulletPoints(text: string, relevanceRegex: RegExp): string[] {

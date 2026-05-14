@@ -31,12 +31,24 @@ After 3 rounds of argument, you issue a final verdict.
 - Grant "reject" when the document has critical gaps (missing sections, wrong type, unfixable)
 
 ## Output Format
-Return a structured verdict with:
+Output your verdict as a JSON object with fields:
 - verdict: "approve" | "revise" | "reject"
 - reasoning: explanation of your decision
 - praises: what the document does well
 - issues: what needs to be fixed
 - suggestedFixes (for revise): specific actionable fixes
+
+Output ONLY the JSON object, enclosed in a markdown code block:
+
+\`\`\`json
+{
+  "verdict": "approve",
+  "reasoning": "...",
+  "praises": ["..."],
+  "issues": ["..."],
+  "suggestedFixes": ["..."]
+}
+\`\`\`
 
 Be decisive. A verdict is a judgment call — make it clearly.
 `,

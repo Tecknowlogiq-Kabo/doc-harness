@@ -22,52 +22,46 @@ export default async function SessionsPage() {
   const sessions = await getSessions();
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "2rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem" }}>Session History</h1>
-        <Link href="/" style={{ color: "#7c3aed", textDecoration: "none", fontSize: "0.9rem" }}>
+    <main className="max-w-3xl mx-auto p-8">
+      <nav className="mb-8 flex justify-between items-center">
+        <Link href="/" className="text-lg font-bold text-primary no-underline">DocHarness</Link>
+        <Link href="/sessions" className="text-sm text-text-muted hover:text-text transition-colors">History</Link>
+      </nav>
+
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-xl font-bold">Session History</h1>
+        <Link href="/" className="text-primary no-underline text-sm">
           + New Generation
         </Link>
       </div>
 
       {sessions.length === 0 ? (
-        <div style={{ color: "#666", textAlign: "center", padding: "4rem 0" }}>
+        <div className="text-text-muted text-center py-16">
           No sessions yet.{" "}
-          <Link href="/" style={{ color: "#7c3aed" }}>Generate your first docs</Link>.
+          <Link href="/" className="text-primary">Generate your first docs</Link>.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div className="flex flex-col gap-3">
           {sessions.map((s) => (
             <Link
               key={s.id}
               href={`/session/${s.id}?prompt=${encodeURIComponent(s.prompt)}`}
-              style={{
-                padding: "1rem",
-                background: "#1a1a1a",
-                borderRadius: 8,
-                border: "1px solid #333",
-                textDecoration: "none",
-                color: "#e0e0e0",
-                display: "block",
-              }}
+              className="p-4 bg-surface rounded-lg border border-border no-underline text-text block hover:border-primary transition-colors"
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="flex justify-between items-center">
                 <div>
-                  <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                  <div className="font-semibold mb-1">
                     {s.prompt.slice(0, 80)}{s.prompt.length > 80 ? "..." : ""}
                   </div>
-                  <div style={{ fontSize: "0.8rem", color: "#888" }}>
+                  <div className="text-xs text-text-muted">
                     {s.documents.length} docs · {new Date(s.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-                <span style={{
-                  padding: "0.2rem 0.5rem",
-                  borderRadius: 4,
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  background: s.status === "completed" ? "#14532d" : s.status === "failed" ? "#450a0a" : "#422006",
-                  color: s.status === "completed" ? "#22c55e" : s.status === "failed" ? "#ef4444" : "#eab308",
-                }}>
+                <span className={`px-2 py-1 rounded text-xs font-semibold uppercase ${
+                  s.status === "completed" ? "bg-green-950 text-success"
+                  : s.status === "failed" ? "bg-red-950 text-error"
+                  : "bg-yellow-950 text-warning"
+                }`}>
                   {s.status}
                 </span>
               </div>

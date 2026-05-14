@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams, useParams } from "next/navigation";
-import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
 import type { PipelineEvent, DocTarget, DebateVerdict, GeneratedDocument } from "@doc-harness/core";
 
 type PhaseStatus = "pending" | "running" | "completed";
@@ -158,10 +158,7 @@ function SessionContent() {
   if (isLoading) {
     return (
       <main className="max-w-3xl mx-auto p-8">
-        <nav className="mb-8 flex justify-between items-center">
-          <Link href="/" className="text-lg font-bold text-primary no-underline">DocHarness</Link>
-          <Link href="/sessions" className="text-sm text-text-muted hover:text-text transition-colors">History</Link>
-        </nav>
+        <PageHeader title="Pipeline Status" description={prompt.slice(0, 100) + (prompt.length > 100 ? "..." : "")} />
         <div className="text-text-muted">Loading session...</div>
       </main>
     );
@@ -169,15 +166,8 @@ function SessionContent() {
 
   return (
     <main className="max-w-3xl mx-auto p-8">
-      <nav className="mb-8 flex justify-between items-center">
-        <Link href="/" className="text-lg font-bold text-primary no-underline">DocHarness</Link>
-        <Link href="/sessions" className="text-sm text-text-muted hover:text-text transition-colors">History</Link>
-      </nav>
 
-      <h1 className="text-xl font-bold mb-2">Pipeline Status</h1>
-      <p className="text-text-muted mb-8 text-sm">
-        {prompt.slice(0, 100)}{prompt.length > 100 ? "..." : ""}
-      </p>
+      <PageHeader title="Pipeline Status" description={prompt.slice(0, 100) + (prompt.length > 100 ? "..." : "")} />
 
       {error && (
         <div className="p-4 bg-red-950 rounded-lg mb-4 border border-red-900">

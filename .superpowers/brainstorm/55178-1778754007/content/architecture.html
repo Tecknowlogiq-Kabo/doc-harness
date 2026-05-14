@@ -1,0 +1,69 @@
+<h2>Parallel Track Architecture</h2>
+<p class="subtitle">How each track touches core vs. web — dependencies shown with arrows</p>
+
+<div class="section">
+  <h3>Architecture Layers</h3>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">@doc-harness/core (Library)</div>
+    <div class="mockup-body" style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="border: 2px solid #60a5fa; border-radius: 8px; padding: 12px; background: rgba(96,165,250,0.1);">
+        <strong>Track 1: Output</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">+ export/ directory<br>+ ZipBuilder, MarkdownWriter<br>+ pipeline: emit doc content objects</span>
+      </div>
+      <div style="border: 2px solid #34d399; border-radius: 8px; padding: 12px; background: rgba(52,211,153,0.1);">
+        <strong>Track 2: Storage</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">+ store/ directory<br>+ SessionStore interface<br>+ SQLiteStore implementation<br>+ SessionRepository</span>
+      </div>
+      <div style="border: 2px solid #f472b6; border-radius: 8px; padding: 12px; background: rgba(244,114,182,0.1);">
+        <strong>Track 4: Hardening</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">+ __tests__/ for all modules<br>+ cli/ directory<br>+ config/ directory<br>+ Pipeline cancellation (AbortSignal)</span>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">@doc-harness/web (Next.js UI)</div>
+    <div class="mockup-body" style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="border: 2px solid #60a5fa; border-radius: 8px; padding: 12px; background: rgba(96,165,250,0.1);">
+        <strong>Track 1: Output UI</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">Download button, copy button<br>Export dropdown (ZIP/MD)<br>Uses core export APIs</span>
+      </div>
+      <div style="border: 2px solid #34d399; border-radius: 8px; padding: 12px; background: rgba(52,211,153,0.1);">
+        <strong>Track 2: Storage UI</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">Session list page, history<br>API routes for CRUD<br>Uses core store APIs</span>
+      </div>
+      <div style="border: 2px solid #fbbf24; border-radius: 8px; padding: 12px; background: rgba(251,191,36,0.1);">
+        <strong>Track 3: UI Polish</strong><br>
+        <span style="font-size: 0.85em; opacity: 0.8;">Tailwind v4 migration<br>Error boundaries, retry<br>Diff view, graph viz<br>No core dependency</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>Dependency Rules for Parallel Work</h3>
+  <ol>
+    <li><strong>Core changes first</strong> — Track 1 & 2 core APIs must be done before their web counterparts</li>
+    <li><strong>Track 3 is independent</strong> — Pure UI, no core changes needed</li>
+    <li><strong>Track 4 wraps everything</strong> — Tests written alongside each track, CLI + config at the end</li>
+  </ol>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="ready" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>Looks good — start building</h3>
+      <p>Begin with core Track 1 + Track 2 APIs, then fan out to web + tests</p>
+    </div>
+  </div>
+  <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>Needs adjustment</h3>
+      <p>I want to change the scope or order of specific tracks</p>
+    </div>
+  </div>
+</div>

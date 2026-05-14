@@ -1,0 +1,38 @@
+<h2>How Should We Build These 4 Tracks?</h2>
+<p class="subtitle">3 approaches — pick the one that fits your timeline and risk tolerance</p>
+
+<div class="options">
+  <div class="option" data-choice="sequential" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Sequential Tracks</h3>
+      <p>Build Track 1 → Track 2 → Track 3 → Track 4, each fully done before the next starts.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Each track is independently shippable</li><li>Lowest risk of breaking things</li><li>Clean git history per track</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Slowest — ~4 sessions to complete all</li><li>UI won't improve until Track 3</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="tracer" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Tracer-Bullet First (Recommended)</h3>
+      <p>Build one thin end-to-end slice: generate → save → download. Then expand width (more features) and depth (more polish).</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest path to user value (downloadable docs)</li><li>Validates architecture early</li><li>Each layer adds visible value</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Some rework as storage schema evolves</li><li>Need discipline to not over-build each layer</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="parallel" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Parallel All Tracks</h3>
+      <p>Build all 4 tracks simultaneously. Core + Web can evolve independently with shared contract.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest overall completion</li><li>Leverages monorepo structure well</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Highest merge conflict risk</li><li>Harder to review and validate</li><li>Tracks may diverge without shared foundation</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

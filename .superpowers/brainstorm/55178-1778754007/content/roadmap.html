@@ -1,0 +1,52 @@
+<h2>DocHarness Enhancement Roadmap</h2>
+<p class="subtitle">18 enhancements across 4 tracks — what order should we build?</p>
+
+<div class="section">
+  <h3>Current State: AI Doc Gen Platform</h3>
+  <ul>
+    <li>6-phase pipeline with 25 AI agents + adversarial debate</li>
+    <li>18 document types (PRDs, ADRs, SRS, etc.)</li>
+    <li>Next.js web UI with real-time SSE streaming</li>
+    <li>Zero persistent storage. Zero tests beyond 3 utility modules. No file output.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>Proposed: 4-Track Enhancement Plan</h3>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="track1" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Output & Downloads</h3>
+      <p>ZIP download, clipboard copy, file output to disk, export to Notion/Google Docs</p>
+    </div>
+  </div>
+  <div class="option" data-choice="track2" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Persistent Storage</h3>
+      <p>SQLite/D1 session storage, document versioning, history browser, session sharing</p>
+    </div>
+  </div>
+  <div class="option" data-choice="track3" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Web UI Polish</h3>
+      <p>Tailwind CSS, error recovery, retry, loading states, diff view, graph viz</p>
+    </div>
+  </div>
+  <div class="option" data-choice="track4" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Production Hardening</h3>
+      <p>Tests, pipeline cancellation, env validation, config system, CLI tool, README</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Recommended: Build in this order</h3>
+  <p>Tracks build on each other. Output → Storage → UI → Hardening.</p>
+</div>

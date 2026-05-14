@@ -4,6 +4,7 @@ export { runPipeline } from "./pipeline/pipeline-orchestrator";
 export { runDebate } from "./agents/debate/debate-orchestrator";
 export { scoreDocument } from "./scorers/document-scorers";
 export { mapDocumentRelations, formatDocumentOutput, formatRelationsOutput } from "./utils/relation-mapper";
+export { extractSections } from "./utils/extract-sections";
 export { runParallelGeneration, createParallelTask } from "./utils/parallel-runner";
 export {
   intakeAgent, discoveryAgent, reviewerAgent, supervisorAgent,
@@ -22,3 +23,6 @@ export {
 export {
   docTypeClassifier, knowledgeBuilder, referenceMaterial, schemaValidator, graphRetrieval,
 } from "./tools";
+
+export * from "./export";
+export * from "./store";

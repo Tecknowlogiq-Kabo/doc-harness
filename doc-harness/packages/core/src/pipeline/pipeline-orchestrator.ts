@@ -15,6 +15,7 @@ import type {
   DocumentManifest, DocTarget, GeneratedDocument,
   PipelineEvent, DocumentRelation,
 } from "../types";
+import { GeneratedDocumentSchema } from "../types";
 import { getDocTypeEntry, getSuggestedRelations, getAgentId } from "../registry/doc-type-registry";
 import { extractSections } from "../utils/extract-sections";
 
@@ -67,10 +68,11 @@ export async function runPipeline(
   if (signal?.aborted) throw new Error("Pipeline cancelled");
 
   const docTypeList = manifest.docs.map((d) => d.type).join(", ");
-  await discoveryAgent.generate(
+  const discoveryResult = await discoveryAgent.generate(
     `Build domain knowledge for: "${userPrompt}"\n\nDocument types to generate: ${docTypeList}`,
     signal
   );
+  const domainContext = discoveryResult.text;
 
   emit({ phase: "discovery", progress: 100, facts: 5 });
 
@@ -78,58 +80,108 @@ export async function runPipeline(
 
   if (signal?.aborted) throw new Error("Pipeline cancelled");
 
-  const generatePromises = manifest.docs.map(async (docTarget) => {
-    emit({
-      phase: "generation",
-      docType: docTarget.type,
-      slug: docTarget.slug,
-      status: "started",
-      total: totalDocs,
-      completed: 0,
-    });
+  const CONCURRENCY = 4;
+  const validDocs: GeneratedDocument[] = [];
+  let completedCount = 0;
 
-    try {
-      const agent = getAgentForTarget(docTarget);
-      const doc = await generateDocument(agent, docTarget, userPrompt, signal);
+  for (let i = 0; i < manifest.docs.length; i += CONCURRENCY) {
+    if (signal?.aborted) throw new Error("Pipeline cancelled");
+    const batch = manifest.docs.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (docTarget) => {
+        emit({
+          phase: "generation",
+          docType: docTarget.type,
+          slug: docTarget.slug,
+          status: "started",
+          total: totalDocs,
+          completed: completedCount,
+        });
 
-      emit({
-        phase: "generation",
-        docType: docTarget.type,
-        slug: docTarget.slug,
-        status: "completed",
-        total: totalDocs,
-        completed: 0,
-      });
+        try {
+          const agent = getAgentForTarget(docTarget);
+          const doc = await generateDocument(agent, docTarget, userPrompt, signal);
+          completedCount++;
+          emit({
+            phase: "generation",
+            docType: docTarget.type,
+            slug: docTarget.slug,
+            status: "completed",
+            total: totalDocs,
+            completed: completedCount,
+          });
+          return doc;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const isRateLimit = msg.includes("429") || msg.includes("rate") || msg.includes("too many");
+          const isContentFilter = msg.includes("content") || msg.includes("safety") || msg.includes("filter") || msg.includes("refused");
 
-      return doc;
-    } catch {
-      emit({
-        phase: "generation",
-        docType: docTarget.type,
-        slug: docTarget.slug,
-        status: "failed",
-        total: totalDocs,
-        completed: 0,
-      });
-      return null;
+          if (isRateLimit) {
+            emit({
+              phase: "error",
+              message: `Rate limited during ${docTarget.type}/${docTarget.slug}, retrying in 5s`,
+            });
+            await new Promise((r) => setTimeout(r, 5000));
+            try {
+              const agent = getAgentForTarget(docTarget);
+              const doc = await generateDocument(agent, docTarget, userPrompt, signal);
+              completedCount++;
+              emit({
+                phase: "generation",
+                docType: docTarget.type,
+                slug: docTarget.slug,
+                status: "completed",
+                total: totalDocs,
+                completed: completedCount,
+              });
+              return doc;
+            } catch (retryErr) {
+              emit({
+                phase: "generation",
+                docType: docTarget.type,
+                slug: docTarget.slug,
+                status: "failed",
+                total: totalDocs,
+                completed: completedCount,
+              });
+              return null;
+            }
+          }
+
+          if (isContentFilter) {
+            emit({
+              phase: "error",
+              message: `Content filtered for ${docTarget.type}/${docTarget.slug}: ${msg.slice(0, 200)}`,
+            });
+            emit({
+              phase: "generation",
+              docType: docTarget.type,
+              slug: docTarget.slug,
+              status: "failed",
+              total: totalDocs,
+              completed: completedCount,
+            });
+            return null;
+          }
+
+          emit({
+            phase: "generation",
+            docType: docTarget.type,
+            slug: docTarget.slug,
+            status: "failed",
+            total: totalDocs,
+            completed: completedCount,
+          });
+          return null;
+        }
+      })
+    );
+
+    for (const r of batchResults) {
+      if (r.status === "fulfilled" && r.value !== null) {
+        validDocs.push(r.value);
+      }
     }
-  });
-
-  const results = await Promise.allSettled(generatePromises);
-  const validDocs = results
-    .filter((r) => r.status === "fulfilled" && r.value !== null)
-    .map((r) => (r as PromiseFulfilledResult<GeneratedDocument>).value);
-
-  const completedCount = validDocs.length;
-  for (const doc of validDocs) {
-    emit({
-      phase: "generation",
-      docType: doc.type,
-      slug: doc.slug,
-      status: "completed",
-      total: totalDocs,
-      completed: completedCount,
-    });
   }
 
   const debateBatchSize = 4;
@@ -187,7 +239,27 @@ export async function runPipeline(
           });
 
           const agent = getAgentForTarget(docTarget);
-          const regenerated = await generateDocument(agent, docTarget, userPrompt, signal);
+          const entry = getDocTypeEntry(docTarget.type);
+          const result = await agent.generate(
+            `Regenerate this document fixing the issues identified during debate.
+
+Original prompt: "${userPrompt}"
+
+${domainContext ? `Domain context: ${domainContext.slice(0, 1000)}\n` : ''}
+
+Debate feedback — issues to fix:
+${transcript.verdict.issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
+
+${transcript.verdict.suggestedFixes?.length ? `\nSuggested fixes:\n${transcript.verdict.suggestedFixes.map((f, idx) => `${idx + 1}. ${f}`).join('\n')}` : ''}
+
+Generate a ${entry.label} (${docTarget.type}).
+Document slug: ${docTarget.slug}
+Document title: ${docTarget.title}
+
+Use the referenceMaterial tool to check section requirements.`,
+            signal
+          );
+          const regenerated = parseDocumentOutput(docTarget, result.text);
           debatedDocs.push(regenerated);
           continue;
         }
@@ -202,7 +274,7 @@ export async function runPipeline(
     emit({ phase: "review", slug: doc.slug, scores });
 
     if (scores.overall < 0.7) {
-      const escalated = await escalateWithSupervisor(doc, scores, userPrompt, signal);
+      const escalated = await escalateWithSupervisor(doc, scores, userPrompt, signal, domainContext);
       if (escalated) {
         reviewedDocs.push(escalated);
         continue;
@@ -246,7 +318,8 @@ async function generateDocument(
   agent: Agent,
   target: DocTarget,
   userPrompt: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  domainContext?: string
 ): Promise<GeneratedDocument> {
   const entry = getDocTypeEntry(target.type);
 
@@ -254,6 +327,8 @@ async function generateDocument(
     `Generate a ${entry.label} (${target.type}) based on this user prompt:
 
 "${userPrompt}"
+
+${domainContext ? `Domain context from research:\n${domainContext.slice(0, 2000)}\n` : ''}
 
 Document slug: ${target.slug}
 Document title: ${target.title}
@@ -275,7 +350,7 @@ function parseDocumentOutput(
 ): GeneratedDocument {
   const sections = extractSections(text);
 
-  return {
+  const doc = {
     slug: target.slug,
     type: target.type,
     title: target.title,
@@ -284,6 +359,13 @@ function parseDocumentOutput(
       { heading: "Overview", body: text.slice(0, 500) },
     ],
   };
+
+  const validated = GeneratedDocumentSchema.safeParse(doc);
+  if (!validated.success) {
+    console.warn("[pipeline] Generated document failed Zod validation:", validated.error.flatten());
+  }
+
+  return doc as GeneratedDocument;
 }
 
 async function selfCorrectDocument(
@@ -325,7 +407,8 @@ async function escalateWithSupervisor(
   doc: GeneratedDocument,
   scores: { completeness: number; format: number; clarity: number; depth: number; crossRef: number; overall: number; issues: string[] },
   userPrompt: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  domainContext?: string
 ): Promise<GeneratedDocument | null> {
   const key = doc.slug;
 
@@ -353,7 +436,8 @@ async function escalateWithSupervisor(
           alternateAgent,
           { type: doc.type, slug: doc.slug, title: doc.title, track: "vision" },
           userPrompt,
-          signal
+          signal,
+          domainContext
         );
         const newScores = scoreDocument(regenerated);
         if (newScores.overall >= 0.7) return regenerated;

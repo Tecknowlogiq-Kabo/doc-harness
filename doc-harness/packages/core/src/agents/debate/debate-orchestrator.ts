@@ -2,6 +2,7 @@ import { advocateAgent } from "./advocate-agent";
 import { skepticAgent } from "./skeptic-agent";
 import { mediatorAgent } from "./mediator-agent";
 import type { GeneratedDocument, DebateVerdict } from "../../types";
+import { DebateVerdictSchema } from "../../types";
 
 export interface DebateTranscript {
   docSlug: string;
@@ -91,7 +92,8 @@ function parseVerdict(text: string): DebateVerdict {
     const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0].startsWith("{") ? jsonMatch[0] : jsonMatch[1]);
-      return parsed as DebateVerdict;
+      const validated = DebateVerdictSchema.safeParse(parsed);
+      if (validated.success) return validated.data;
     }
   } catch {
     // Fall through to text-based fallback parsing

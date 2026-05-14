@@ -1,6 +1,10 @@
 import { generateText, stepCountIs, type Tool, type LanguageModel, type LanguageModelUsage } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+
+const ollama = createOpenAI({
+  baseURL: process.env.OLLAMA_BASE_URL ?? "https://ollama.com/v1",
+  apiKey: process.env.OLLAMA_API_KEY ?? "ollama",
+});
 
 const ROLE_MODELS: Record<string, string> = {
   orchestrator: process.env.OLLAMA_ORCHESTRATOR_MODEL ?? "deepseek-v4-flash",
@@ -10,28 +14,7 @@ const ROLE_MODELS: Record<string, string> = {
 
 export function getModelForRole(role: string): LanguageModel {
   const modelName = ROLE_MODELS[role] ?? ROLE_MODELS.orchestrator;
-
-  // Ollama takes priority if base URL is explicitly set
-  if (process.env.OLLAMA_BASE_URL) {
-    const ollamaProvider = createOpenAI({
-      baseURL: process.env.OLLAMA_BASE_URL,
-      apiKey: process.env.OLLAMA_API_KEY ?? "ollama",
-    });
-    return ollamaProvider(modelName) as any;
-  }
-
-  // Otherwise use Anthropic if key is available
-  if (process.env.ANTHROPIC_API_KEY) {
-    const anthroModel = process.env.DOC_HARNESS_MODEL ?? "claude-sonnet-4-5";
-    return anthropic(anthroModel) as any;
-  }
-
-  // Fall back to Ollama local
-  const ollamaProvider = createOpenAI({
-    baseURL: "http://localhost:11434/v1",
-    apiKey: "ollama",
-  });
-  return ollamaProvider(modelName) as any;
+  return ollama(modelName) as any;
 }
 
 let totalTokens = { prompt: 0, completion: 0 };

@@ -240,7 +240,11 @@ export const docTypeRegistry: Record<DocumentType, DocTypeEntry> = {
 };
 
 export function getDocTypeEntry(type: DocumentType): DocTypeEntry {
-  return docTypeRegistry[type];
+  const entry = docTypeRegistry[type];
+  if (!entry) {
+    throw new Error(`Unknown document type: "${type}". Registered types: ${Object.keys(docTypeRegistry).join(", ")}`);
+  }
+  return entry;
 }
 
 export function getTypesForTrack(track: DocumentTrack): DocumentType[] {
@@ -254,5 +258,5 @@ export function getAgentId(type: DocumentType): string {
 }
 
 export function getSuggestedRelations(docType: DocumentType): { targetType: DocumentType; relation: RelationType }[] {
-  return docTypeRegistry[docType].defaultRelations;
+  return docTypeRegistry[docType]?.defaultRelations ?? [];
 }

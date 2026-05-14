@@ -10,6 +10,7 @@ export function createSpecialistAgent(docType: DocumentType): Agent {
     .join("\n");
 
   return createAgent({
+    role: "specialist",
     system: `
 You are the **${entry.label} Specialist Agent** in the DocHarness system.
 

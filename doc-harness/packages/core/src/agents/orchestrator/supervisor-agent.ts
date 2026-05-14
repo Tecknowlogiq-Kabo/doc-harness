@@ -1,6 +1,7 @@
 import { createAgent, type Agent } from "../agent-factory";
 
 export const supervisorAgent: Agent = createAgent({
+  role: "orchestrator",
   system: `
 You are the **Supervisor Agent** — the pipeline controller for DocHarness.
 

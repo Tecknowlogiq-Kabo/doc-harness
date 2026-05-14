@@ -2,6 +2,7 @@ import { createAgent, type Agent } from "../agent-factory";
 import { schemaValidator } from "../../tools";
 
 export const advocateAgent: Agent = createAgent({
+  role: "debate",
   system: `
 You are the **Advocate Agent** in DocHarness's debate system.
 

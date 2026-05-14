@@ -2,6 +2,7 @@ import { createAgent, type Agent } from "../agent-factory";
 import { docTypeClassifier } from "../../tools";
 
 export const intakeAgent: Agent = createAgent({
+  role: "orchestrator",
   system: `
 You are the **Intake Agent** — the entry point of the DocHarness pipeline.
 

@@ -1,18 +1,25 @@
 import { generateText, stepCountIs, type Tool, type LanguageModel, type LanguageModelUsage } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
-function getModel(): LanguageModel {
-  const modelName = process.env.OLLAMA_MODEL ?? "deepseek-v4-flash";
-  const baseUrl = process.env.OLLAMA_BASE_URL ?? "https://api.ollama.com/v1";
-  const apiKey = process.env.OLLAMA_API_KEY ?? "ollama";
+const baseUrl = process.env.OLLAMA_BASE_URL ?? "https://api.ollama.com/v1";
+const apiKey = process.env.OLLAMA_API_KEY ?? "ollama";
+const ollamaProvider = createOpenAI({ baseURL: baseUrl, apiKey });
 
-  const ollamaProvider = createOpenAI({ baseURL: baseUrl, apiKey });
+const ROLE_MODELS: Record<string, string> = {
+  orchestrator: process.env.OLLAMA_ORCHESTRATOR_MODEL ?? "deepseek-v4-flash",
+  specialist:  process.env.OLLAMA_SPECIALIST_MODEL  ?? "deepseek-v4-pro",
+  debate:      process.env.OLLAMA_DEBATE_MODEL      ?? "kimi-k2.6",
+};
+
+export function getModelForRole(role: string): LanguageModel {
+  const modelName = ROLE_MODELS[role] ?? ROLE_MODELS.orchestrator;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ollamaProvider(modelName) as any;
 }
 
 export interface AgentConfig {
   system: string;
+  role?: "orchestrator" | "specialist" | "debate";
   tools?: Record<string, Tool>;
   maxSteps?: number;
   model?: LanguageModel;
@@ -34,7 +41,8 @@ async function sleep(ms: number): Promise<void> {
 
 export function createAgent(config: AgentConfig) {
   const {
-    model = getModel(),
+    role = "specialist",
+    model = getModelForRole(role),
     system,
     tools = {},
     maxSteps = 5,

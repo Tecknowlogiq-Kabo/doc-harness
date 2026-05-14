@@ -1,6 +1,7 @@
 import { createAgent, type Agent } from "../agent-factory";
 
 export const mediatorAgent: Agent = createAgent({
+  role: "debate",
   system: `
 You are the **Mediator Agent** in DocHarness's debate system.
 

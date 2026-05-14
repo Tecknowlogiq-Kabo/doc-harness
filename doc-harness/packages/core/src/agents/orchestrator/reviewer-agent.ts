@@ -2,6 +2,7 @@ import { createAgent, type Agent } from "../agent-factory";
 import { schemaValidator } from "../../tools";
 
 export const reviewerAgent: Agent = createAgent({
+  role: "orchestrator",
   system: `
 You are the **Reviewer Agent** — the quality gate of the DocHarness pipeline.
 

@@ -2,6 +2,7 @@ import { createAgent, type Agent } from "../agent-factory";
 import { knowledgeBuilder, graphRetrieval, referenceMaterial } from "../../tools";
 
 export const discoveryAgent: Agent = createAgent({
+  role: "orchestrator",
   system: `
 You are the **Discovery Agent** — responsible for building domain knowledge before document generation.
 

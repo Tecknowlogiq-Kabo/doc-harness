@@ -3,7 +3,7 @@ import { intakeAgent } from "../agents/orchestrator/intake-agent";
 import { discoveryAgent } from "../agents/orchestrator/discovery-agent";
 import { reviewerAgent } from "../agents/orchestrator/reviewer-agent";
 import { runDebate } from "../agents/debate/debate-orchestrator";
-import { scoreDocument } from "../scorers/document-scorers";
+import { scoreDocument, passesHardThresholds } from "../scorers/document-scorers";
 import {
   prdAgent, ideaAgent, planAgent,
   mrdAgent, brdAgent, urdAgent,
@@ -273,7 +273,7 @@ Use the referenceMaterial tool to check section requirements.`,
     const scores = scoreDocument(doc);
     emit({ phase: "review", slug: doc.slug, scores });
 
-    if (scores.overall < 0.7) {
+    if (scores.overall < 0.7 || !passesHardThresholds(scores)) {
       const escalated = await escalateWithSupervisor(doc, scores, userPrompt, signal, domainContext);
       if (escalated) {
         reviewedDocs.push(escalated);
@@ -298,6 +298,13 @@ Use the referenceMaterial tool to check section requirements.`,
 
   const relations = mapRelations(reviewedDocs);
 
+  const consistencyWarnings = await checkCrossDocumentConsistency(reviewedDocs, relations, signal);
+  if (consistencyWarnings.length > 0) {
+    for (const warning of consistencyWarnings) {
+      emit({ phase: "error", message: `[consistency] ${warning}` });
+    }
+  }
+
   for (const doc of reviewedDocs) {
     emit({ phase: "assembly", slug: doc.slug, status: "linked" });
     emit({ phase: "assembly", slug: doc.slug, status: "written" });
@@ -314,6 +321,51 @@ function getAgentForTarget(target: DocTarget): Agent {
   return specialistMap[getAgentId(target.type)] ?? prdAgent;
 }
 
+async function negotiateSprint(
+  agent: Agent,
+  target: DocTarget,
+  userPrompt: string,
+  domainContext: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const entry = getDocTypeEntry(target.type);
+
+  const result = await agent.generate(
+    `Before generating the ${entry.label}, propose a sprint plan. 
+
+User prompt: "${userPrompt}"
+${domainContext ? `Domain context: ${domainContext.slice(0, 1000)}` : ''}
+
+Document type: ${target.type} (${entry.label})
+Required sections: ${entry.requiredSections.join(', ')}
+Description: ${entry.description}
+
+Respond ONLY with a JSON object:
+{
+  "sections": ["Section 1 name", "Section 2 name", ...],
+  "approach": "brief description of how you'll write this document",
+  "risks": ["any potential gaps or challenges"]
+}
+
+Make sure your sections list covers ALL required sections: ${entry.requiredSections.join(', ')}`,
+    signal
+  );
+
+  try {
+    const plan = JSON.parse(extractJSON(result.text));
+    const planned = (plan.sections ?? []).map((s: string) => s.toLowerCase());
+    const missing = entry.requiredSections.filter(
+      (req) => !planned.some((p: string) => p.includes(req.toLowerCase()))
+    );
+    if (missing.length > 0) {
+      console.warn(`Sprint plan for ${target.slug} missing required sections: ${missing.join(', ')}`);
+    }
+    return plan.sections ?? entry.requiredSections;
+  } catch {
+    return entry.requiredSections;
+  }
+}
+
 async function generateDocument(
   agent: Agent,
   target: DocTarget,
@@ -323,12 +375,17 @@ async function generateDocument(
 ): Promise<GeneratedDocument> {
   const entry = getDocTypeEntry(target.type);
 
+  const sprintSections = await negotiateSprint(agent, target, userPrompt, domainContext ?? "", signal);
+
   const result = await agent.generate(
     `Generate a ${entry.label} (${target.type}) based on this user prompt:
 
 "${userPrompt}"
 
 ${domainContext ? `Domain context from research:\n${domainContext.slice(0, 2000)}\n` : ''}
+
+Sprint plan — sections to produce:
+${sprintSections.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
 Document slug: ${target.slug}
 Document title: ${target.title}
@@ -495,9 +552,64 @@ export function mapRelations(docs: GeneratedDocument[]): DocumentRelation[] {
   return relations;
 }
 
+async function checkCrossDocumentConsistency(
+  docs: GeneratedDocument[],
+  relations: DocumentRelation[],
+  signal?: AbortSignal
+): Promise<string[]> {
+  const warnings: string[] = [];
+
+  for (const rel of relations) {
+    if (signal?.aborted) break;
+
+    const source = docs.find(d => d.slug === rel.source);
+    const target = docs.find(d => d.slug === rel.target);
+    if (!source || !target) continue;
+
+    const sourceLower = source.content.toLowerCase();
+    const targetLower = target.content.toLowerCase();
+
+    const techTerms = ["postgresql", "mongodb", "mysql", "redis", "sqlite", "dynamodb", "kafka", "rabbitmq"];
+    const sourceTechs = techTerms.filter(t => sourceLower.includes(t));
+    const targetTechs = techTerms.filter(t => targetLower.includes(t));
+
+    for (const st of sourceTechs) {
+      for (const tt of targetTechs) {
+        if (st !== tt && techTerms.includes(st) && techTerms.includes(tt)) {
+          warnings.push(
+            `Cross-document inconsistency: ${source.slug} mentions "${st}" while ${target.slug} mentions "${tt}"`
+          );
+        }
+      }
+    }
+
+    const sourceMusts = extractMusts(source.content);
+    const targetMusts = extractMusts(target.content);
+    for (const [key, val] of Object.entries(sourceMusts)) {
+      if (targetMusts[key] && targetMusts[key] !== val) {
+        warnings.push(
+          `Cross-document contradiction: ${source.slug} requires "${key}: ${val}" but ${target.slug} requires "${key}: ${targetMusts[key]}"`
+        );
+      }
+    }
+  }
+
+  return warnings;
+}
+
+function extractMusts(content: string): Record<string, string> {
+  const musts: Record<string, string> = {};
+  const regex = /\b(must|shall|must not|shall not|should|should not)\s+(\w[\w\s]{5,80})/gi;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    musts[match[0].slice(0, 60)] = match[1];
+  }
+  return musts;
+}
+
 function extractJSON(text: string): string {
   const jsonBlock = text.match(/```json\s*([\s\S]*?)```/);
   if (jsonBlock) return jsonBlock[1].trim();
-  const match = text.match(/\{(?:[^{}]|\{[^{}]*\})*\}/);
+  const match = text.match(/\{[\s\S]*\}/);
   return match ? match[0] : "{}";
 }

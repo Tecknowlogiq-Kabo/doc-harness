@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import type { PipelineEvent, DocTarget, DebateVerdict } from "@doc-harness/core";
+import type { PipelineEvent, DocTarget, DebateVerdict, GeneratedDocument, DocumentRelation, DocumentManifest } from "@doc-harness/core";
 
 type PhaseStatus = "pending" | "running" | "completed";
 
-export default function SessionPage() {
+function SessionContent() {
   const params = useSearchParams();
   const prompt = params.get("prompt") ?? "No prompt provided";
 
@@ -21,9 +21,9 @@ export default function SessionPage() {
 
   const [docs, setDocs] = useState<DocTarget[]>([]);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
-  const [debateEvents, setDebateEvents] = useState<{ slug: string; round: number; role: string }[]>([]);
+  const [debateEvents, setDebateEvents] = useState<{ slug: string; round: number; role: string; argument: string }[]>([]);
   const [verdicts, setVerdicts] = useState<Record<string, DebateVerdict>>({});
-  const [outputFiles, setOutputFiles] = useState<string[]>([]);
+  const [resultDocuments, setResultDocuments] = useState<GeneratedDocument[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,6 +96,7 @@ export default function SessionPage() {
           slug: event.slug,
           round: event.round,
           role: event.role,
+          argument: event.argument,
         }]);
         break;
 
@@ -113,6 +114,10 @@ export default function SessionPage() {
 
       case "complete":
         setPhaseStatus((prev) => ({ ...prev, assembly: "completed" }));
+        break;
+
+      case "result":
+        setResultDocuments(event.result.documents);
         break;
 
       case "error":
@@ -202,23 +207,76 @@ export default function SessionPage() {
       {debateEvents.length > 0 && (
         <div style={{ marginTop: "2rem" }}>
           <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Debate Activity</h2>
-          <div style={{ fontSize: "0.85rem", color: "#888" }}>
+          <div style={{ fontSize: "0.85rem", color: "#888", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {debateEvents.map((e, i) => (
-              <div key={i}>
-                [{e.slug}] Round {e.round} — {e.role}
+              <div key={i} style={{ padding: "0.5rem", background: "#111", borderRadius: 6 }}>
+                <div style={{ fontWeight: 600, color: e.role === "advocate" ? "#22c55e" : "#ef4444", marginBottom: "0.25rem" }}>
+                  [{e.slug}] Round {e.round} — {e.role}
+                </div>
+                <div style={{ fontSize: "0.8rem", lineHeight: 1.5, maxHeight: 120, overflowY: "auto" }}>
+                  {e.argument.slice(0, 400)}{e.argument.length > 400 ? "..." : ""}
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Output files */}
-      {outputFiles.length > 0 && (
+      {/* Result documents */}
+      {resultDocuments.length > 0 && (
         <div style={{ marginTop: "2rem" }}>
-          <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Output Files</h2>
-          <div style={{ fontSize: "0.85rem", color: "#888" }}>
-            {outputFiles.map((f, i) => (
-              <div key={i}>{f}</div>
+          <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Generated Documents</h2>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/export", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ documents: resultDocuments }),
+                });
+                if (!res.ok) throw new Error("Export failed");
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "documents.zip";
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                console.error("Download failed:", err);
+              }
+            }}
+            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem", fontWeight: 600, borderRadius: 6, border: "none", background: "#7c3aed", color: "#fff", cursor: "pointer", marginBottom: "1rem" }}
+          >
+            Download All as ZIP ({resultDocuments.length} docs)
+          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {resultDocuments.map((doc) => (
+              <details key={doc.slug} style={{ padding: "0.75rem", background: "#111", borderRadius: 8, border: "1px solid #333" }}>
+                <summary style={{ display: "flex", alignItems: "center", fontWeight: 600, cursor: "pointer", color: "#e0e0e0" }}>
+                  <span>
+                    {doc.title} <span style={{ color: "#888", fontSize: "0.8rem" }}>({doc.type})</span>
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const blob = new Blob([doc.content], { type: "text/markdown" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${doc.slug}.${doc.type}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{ marginLeft: "auto", padding: "0.2rem 0.5rem", fontSize: "0.75rem", borderRadius: 4, border: "1px solid #444", background: "transparent", color: "#888", cursor: "pointer" }}
+                  >
+                    Download .md
+                  </button>
+                </summary>
+                <pre style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap", fontSize: "0.8rem", lineHeight: 1.5, color: "#aaa", maxHeight: 400, overflowY: "auto" }}>
+                  {doc.content}
+                </pre>
+              </details>
             ))}
           </div>
         </div>
@@ -255,5 +313,13 @@ function PhaseRow({ phase, status, extra }: { phase: string; status: PhaseStatus
       <span style={{ flex: 1, color: colors[status] }}>{labels[phase] ?? phase}</span>
       {extra && <span style={{ fontSize: "0.8rem", color: "#666" }}>{extra}</span>}
     </div>
+  );
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: "2rem", color: "#888" }}>Loading...</div>}>
+      <SessionContent />
+    </Suspense>
   );
 }

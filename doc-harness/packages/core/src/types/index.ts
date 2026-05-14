@@ -65,6 +65,20 @@ export const ScoreSchema = z.object({
 
 export type Score = z.infer<typeof ScoreSchema>;
 
+export const RelationTypeSchema = z.enum([
+  "implements", "extends", "depends_on", "related",
+]);
+
+export type RelationType = z.infer<typeof RelationTypeSchema>;
+
+export const DocumentRelationSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  type: RelationTypeSchema,
+});
+
+export type DocumentRelation = z.infer<typeof DocumentRelationSchema>;
+
 export const DebateRoundSchema = z.object({
   round: z.number(),
   role: z.enum(["advocate", "skeptic", "mediator"]),
@@ -89,24 +103,15 @@ export const PipelineEventSchema = z.discriminatedUnion("phase", [
   z.object({ phase: z.literal("generation"), docType: DocumentTypeSchema, slug: z.string(), status: z.enum(["started", "completed", "failed"]), total: z.number(), completed: z.number() }),
   z.object({ phase: z.literal("debate"), docType: DocumentTypeSchema, slug: z.string(), round: z.number(), role: z.string(), argument: z.string() }),
   z.object({ phase: z.literal("debate-verdict"), docType: DocumentTypeSchema, slug: z.string(), verdict: DebateVerdictSchema }),
-  z.object({ phase: z.literal("review"), slug: z.string(), scores: ScoreSchema }),
+  z.object({ phase: z.literal("review"), slug: z.string(), scores: ScoreSchema, reviewerNotes: z.string().optional() }),
   z.object({ phase: z.literal("assembly"), slug: z.string(), status: z.enum(["linked", "written"]) }),
   z.object({ phase: z.literal("complete"), outputDir: z.string(), docCount: z.number() }),
+  z.object({ phase: z.literal("result"), result: z.object({
+    documents: z.array(GeneratedDocumentSchema),
+    relations: z.array(DocumentRelationSchema),
+    manifest: DocumentManifestSchema,
+  }) }),
   z.object({ phase: z.literal("error"), message: z.string() }),
 ]);
 
 export type PipelineEvent = z.infer<typeof PipelineEventSchema>;
-
-export const RelationTypeSchema = z.enum([
-  "implements", "extends", "depends_on", "related",
-]);
-
-export type RelationType = z.infer<typeof RelationTypeSchema>;
-
-export const DocumentRelationSchema = z.object({
-  source: z.string(),
-  target: z.string(),
-  type: RelationTypeSchema,
-});
-
-export type DocumentRelation = z.infer<typeof DocumentRelationSchema>;

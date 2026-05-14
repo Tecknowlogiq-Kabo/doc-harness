@@ -249,6 +249,10 @@ export function getTypesForTrack(track: DocumentTrack): DocumentType[] {
     .map((e) => e.type);
 }
 
+export function getAgentId(type: DocumentType): string {
+  return docTypeRegistry[type]?.agentId ?? `${type}-agent`;
+}
+
 export function getSuggestedRelations(docType: DocumentType): { targetType: DocumentType; relation: RelationType }[] {
   return docTypeRegistry[docType].defaultRelations;
 }

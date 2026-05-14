@@ -1,7 +1,19 @@
 import { generateText, stepCountIs, type Tool, type LanguageModel, type LanguageModelUsage } from "ai";
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 
 function getModel(): LanguageModel {
+  const ollamaUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+  const ollamaModel = process.env.OLLAMA_MODEL;
+  if (ollamaModel) {
+    const ollamaProvider = createOpenAI({
+      baseURL: ollamaUrl,
+      apiKey: process.env.OLLAMA_API_KEY ?? "ollama",
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ollamaProvider(ollamaModel) as any;
+  }
+
   const gatewayUrl = process.env.CLOUDFLARE_AI_GATEWAY_URL;
   const gatewayToken = process.env.CLOUDFLARE_AI_GATEWAY_TOKEN;
   const modelName = process.env.DOC_HARNESS_MODEL ?? "claude-sonnet-4-5";

@@ -100,7 +100,7 @@ export async function runPipeline(
 
         try {
           const agent = getAgentForTarget(docTarget);
-          const doc = await generateDocument(agent, docTarget, userPrompt, signal);
+          const doc = await generateDocument(agent, docTarget, userPrompt, signal, domainContext);
           completedCount++;
           emit({
             phase: "generation",
@@ -124,7 +124,7 @@ export async function runPipeline(
             await new Promise((r) => setTimeout(r, 5000));
             try {
               const agent = getAgentForTarget(docTarget);
-              const doc = await generateDocument(agent, docTarget, userPrompt, signal);
+              const doc = await generateDocument(agent, docTarget, userPrompt, signal, domainContext);
               completedCount++;
               emit({
                 phase: "generation",

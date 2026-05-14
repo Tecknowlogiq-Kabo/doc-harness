@@ -14,6 +14,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (prompt.length > 20000) {
+    return new Response(JSON.stringify({ error: "Prompt too long. Maximum 20,000 characters." }), {
+      status: 413,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const store = new SQLiteStore();
   const sessionId = `session-${Date.now()}`;
 

@@ -316,13 +316,17 @@ Generate an improved version that fixes all identified issues.`,
   };
 }
 
+// Tracks per-document escalation attempts within a single pipeline run.
+// Must be module-scoped so the counter persists across multiple calls
+// for the same doc slug (e.g., on re-verification after self-correction).
+const escalationAttempts = new Map<string, number>();
+
 async function escalateWithSupervisor(
   doc: GeneratedDocument,
   scores: { completeness: number; format: number; clarity: number; depth: number; crossRef: number; overall: number; issues: string[] },
   userPrompt: string,
   signal?: AbortSignal
 ): Promise<GeneratedDocument | null> {
-  const escalationAttempts = new Map<string, number>();
   const key = doc.slug;
 
   if (signal?.aborted) throw new Error("Pipeline cancelled");
